@@ -6,8 +6,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
+import json
+from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field
+
+from pydantic import BaseModel, ConfigDict, Field , field_validator
+from src.model_packaging.preprocess import (PREPROCESSING_VERSION, FEATURE_NAMES)
 
 from model_packaging.contracts import (
     QualityBand,
@@ -48,6 +52,15 @@ class ArtifactManifest(BaseModel):
     output_labels: tuple[QualityBand, ...]
     estimator_type: str = Field(min_length=1)
 
+    @field_validator("schema_version")
+    @classmethod
+    def validate_shema_version(cls,value: str)-> str:
+        """
+        impide crear el manifest si la version es invalida
+        """
+        if value != ARTIFACT_SCHEMA_VERSION:
+            raise ValueError (f"Ha fallado la creacion del manifest debido a que no cumple ya que se espera {ARTIFACT_SCHEMA_VERSION}")
+
 
 @dataclass(frozen=True)
 class LoadedModelBundle:
@@ -61,8 +74,15 @@ def create_manifest(
     estimator: WineQualityEstimator, model_version: str
 ) -> ArtifactManifest:
     """TODO: devuelve un manifiesto compatible con el contrato."""
-
-    raise NotImplementedError("Implementa create_manifest().")
+    return ArtifactManifest(
+        schema_version = ARTIFACT_SCHEMA_VERSION,
+        model_version=model_version,
+        preprocessing_version= PREPROCESSING_VERSION,
+        feature_names=FEATURE_NAMES,
+        output_labels=OUTPUT_LABELS,
+        estimator_type= type (estimator).__name__
+        )
+    
 
 
 def save_model_bundle(
@@ -71,9 +91,15 @@ def save_model_bundle(
     manifest: ArtifactManifest | None = None,
 ) -> ArtifactManifest:
     """TODO: escribe manifest.json y model.joblib de forma segura."""
+    manifest_json = str = Path(bundle_path) / "manifest.json"
 
-    raise NotImplementedError("Implementa save_model_bundle().")
+    if manifest is not None:
+        
+        with open( Path (BUNDLE_PATH) / "manifest.json", "wb") as m:
+            json.dump(manifest_json, m, indent=4, ensure_ascii=False)
 
+    else:
+        raise("Manifest cannot be None")
 
 def load_model_bundle(bundle_path: Path) -> LoadedModelBundle:
     """TODO: valida el manifiesto antes de cargar el estimador."""

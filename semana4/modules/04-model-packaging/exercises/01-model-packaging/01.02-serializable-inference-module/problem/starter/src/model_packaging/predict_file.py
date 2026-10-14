@@ -5,7 +5,14 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from model_packaging.artifact import DEFAULT_BUNDLE_PATH
+import csv
+
+from model_packaging.artifact import (
+    DEFAULT_BUNDLE_PATH,
+    infer_wine_quality,
+    load_model_bundle,
+)
+from model_packaging.contracts import WineQualityRequest
 
 
 def predict_file(
@@ -13,9 +20,25 @@ def predict_file(
     output_path: Path,
     bundle_path: Path,
 ) -> int:
-    """TODO: valida todas las filas y escribe el CSV solo al final."""
+    """Valida todas las filas y escribe el CSV solo al final."""
 
-    raise NotImplementedError("Implementa predict_file().")
+    bundle = load_model_bundle(bundle_path)  # cargamos el modelo
+    results = []  # aquí guardamos las predicciones (en memoria)
+
+    with input_path.open(encoding="utf-8") as file:  # abrimos el CSV de entrada
+        for row in csv.DictReader(file):  # leemos fila a fila como diccionario
+            sample_id = row.pop("sample_id")  # sacamos el id; quedan las medidas
+            request = WineQualityRequest(**row)  # valida (si falla -> ValueError)
+            prediction = infer_wine_quality(bundle, request)  # predecimos
+            results.append({"sample_id": sample_id, **prediction.model_dump()})
+
+    # Solo llegamos aquí si TODAS las filas eran válidas: ahora escribimos
+    with output_path.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=results[0].keys())  # columnas
+        writer.writeheader()  # escribimos la cabecera
+        writer.writerows(results)  # escribimos todas las predicciones
+
+    return len(results)  # devolvemos cuántas filas hemos predicho
 
 
 def parse_args() -> argparse.Namespace:
