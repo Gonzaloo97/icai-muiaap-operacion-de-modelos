@@ -4,8 +4,9 @@
 # Revisa los campos de assets/inference_samples.csv y prohíbe columnas extra.
 
 # BaseModel = contrato, ConfigDict = configuración, Field = reglas
-from pydantic import BaseModel, ConfigDict, Field
 from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class WineQualityRequest(BaseModel):
