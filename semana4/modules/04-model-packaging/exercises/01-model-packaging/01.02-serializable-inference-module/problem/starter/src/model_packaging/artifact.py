@@ -129,7 +129,9 @@ def save_model_bundle(
     model_tmp = bundle_path / (MODEL_FILENAME + ".tmp")
     manifest_tmp = bundle_path / (MANIFEST_FILENAME + ".tmp")
 
-    joblib.dump(estimator, model_tmp)  # el modelo, en binario
+    # El modelo va dentro de un diccionario {"estimator": ...}: es el formato
+    # del bundle de la asignatura (lo leen también la semana 5 y siguientes)
+    joblib.dump({"estimator": estimator}, model_tmp)
     manifest_text = json.dumps(manifest.model_dump(), indent=2)  # dict -> texto JSON
     manifest_tmp.write_text(manifest_text, encoding="utf-8")
 
@@ -161,7 +163,10 @@ def load_model_bundle(bundle_path: Path) -> LoadedModelBundle:
     manifest = ArtifactManifest.model_validate(data)
 
     # 4. Solo ahora, con el manifiesto validado, cargamos el binario
-    estimator = joblib.load(model_path)
+    payload = joblib.load(model_path)  # un diccionario {"estimator": ...}
+    if not isinstance(payload, dict):
+        raise ValueError('model.joblib debe contener un diccionario {"estimator": ...}')
+    estimator = payload.get("estimator")  # sacamos el modelo del diccionario
     check_estimator(estimator)
 
     # 5. El binario tiene que ser del tipo que dice el manifiesto
