@@ -74,15 +74,66 @@ def collect_values(st: Any) -> tuple[bool, dict[str, float]]:
 
 
 def get_cached_gateway(st: Any, bundle_value: str | None) -> InferenceGateway:
-    """TODO: usa `st.cache_resource` sobre el gateway, no sobre la respuesta."""
+    """Carga el gateway UNA sola vez con `st.cache_resource`."""
 
-    raise NotImplementedError("TODO: cachea el gateway heredado de S5")
+    # st.cache_resource guarda lo que devuelve la función. En los siguientes
+    # reruns, con la misma ruta de bundle, no vuelve a cargar el modelo: lo
+    # reutiliza. Se cachea el gateway (el recurso), NUNCA una respuesta.
+    @st.cache_resource(show_spinner=False)
+    def cached_gateway(configured_bundle: str | None) -> InferenceGateway:
+        return build_gateway(configured_bundle)
+
+    return cached_gateway(bundle_value)
 
 
 def render_state(st: Any, state: UiState, target: Any | None = None) -> None:
-    """TODO: presenta idle/loading/success/error en un target de Streamlit."""
+    """Presenta idle/loading/success/error sin mostrar excepciones."""
 
-    raise NotImplementedError("TODO: renderiza el estado sin mostrar excepciones")
+    # Con target (el hueco de "operación"): solo mostramos el "cargando".
+    # Al terminar lo vaciamos, porque el resultado se pinta una vez más abajo.
+    if target is not None:
+        if state.phase == "loading":
+            target.info("Ejecutando inferencia…")
+        else:
+            target.empty()
+        return
+
+    if state.phase == "idle":  # todavía no hay resultado
+        st.info("Completa el formulario y pulsa «Ejecutar inferencia».")
+
+    elif state.phase == "loading":  # se está calculando
+        st.info("Ejecutando inferencia…")
+
+    elif state.phase == "success" and state.view is not None:  # hay resultado
+        view = state.view
+        # Tres datos clave, uno al lado del otro
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Categoría", view.quality_label)
+        col2.metric("Confianza", f"{view.confidence:.0%}")
+        col3.metric("Latencia", f"{view.latency_ms:.0f} ms")
+        # Mensaje de confianza: aviso amarillo si es baja, azul si no
+        confidence_text = f"{view.confidence_label}: {view.confidence_message}"
+        if view.confidence_level == "low":
+            st.warning(confidence_text)
+        else:
+            st.info(confidence_text)
+        # Mensaje de latencia: lenta = aviso, pero sigue siendo un éxito
+        latency_text = f"{view.latency_label}: {view.latency_message}"
+        if view.latency_status == "above_target":
+            st.warning(latency_text)
+        else:
+            st.caption(latency_text)
+        # Detalle técnico plegado, para quien lo necesite
+        with st.expander("Trazabilidad"):
+            st.write(f"request_id: {state.request_id}")
+            st.write(f"model_version: {view.model_version}")
+            st.write(f"preprocessing_version: {view.preprocessing_version}")
+
+    elif state.phase == "error" and state.error is not None:  # algo falló
+        error = state.error
+        st.error(f"{error.title}. {error.message}")  # qué ha pasado
+        st.info(error.recovery)  # qué puede hacer la persona
+        st.caption(f"request_id: {error.request_id}")  # para buscarlo en logs
 
 
 def main() -> None:
