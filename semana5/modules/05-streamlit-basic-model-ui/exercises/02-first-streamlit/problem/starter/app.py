@@ -40,22 +40,38 @@ def render_inference_error(st: Any) -> None:
 
 
 def collect_values(st: Any) -> tuple[bool, dict[str, float]]:
-    """TODO: renderiza ``FIELD_SPECS`` dentro de un único ``st.form``.
+    """Dibuja los once campos de ``FIELD_SPECS`` dentro de un único formulario.
 
-    Cada ``number_input`` debe recibir label, rango, default, step y una key
-    estable. Devuelve ``(submitted, values)`` sin llamar al gateway.
+    Devuelve ``(submitted, values)`` sin llamar al gateway.
     """
 
-    raise NotImplementedError(
-        f"TODO: renderiza los {len(FIELD_SPECS)} campos de FIELD_SPECS"
-    )
+    values = {}  # aquí guardamos el valor de cada campo
+    with st.form("wine_quality_form"):  # todo lo de dentro va en el formulario
+        for field in FIELD_SPECS:  # recorremos los 11 campos, en orden
+            values[field.name] = st.number_input(
+                field.label,  # texto que ve la persona
+                min_value=field.min_value,  # valor mínimo permitido
+                max_value=field.max_value,  # valor máximo permitido
+                value=field.default,  # valor con el que empieza
+                step=field.step,  # cuánto sube/baja con los botones + y -
+                key=f"input_{field.name}",  # nombre interno estable del campo
+            )
+        # El botón: True solo en la ejecución en la que se pulsa
+        submitted = st.form_submit_button("Ejecutar inferencia")
+    return submitted, values
 
 
 def render_prediction(st: Any, prediction: PredictionPayload) -> None:
-    """TODO: presenta los cuatro campos de ``PredictionPayload``."""
+    """Muestra los cuatro campos de ``PredictionPayload``."""
 
-    raise NotImplementedError(
-        "TODO: presenta quality_band, confidence y las dos versiones"
+    st.success(f"quality_band: {prediction.quality_band}")  # la categoría
+    st.write(f"confidence: {prediction.confidence:.2f}")  # confianza, 2 decimales
+    st.write(f"model_version: {prediction.model_version}")  # qué modelo
+    st.write(f"preprocessing_version: {prediction.preprocessing_version}")
+    # Aviso honesto: la confianza no es una garantía de acierto
+    st.caption(
+        "La confianza es la probabilidad que el modelo asigna a su respuesta; "
+        "no garantiza que sea correcta."
     )
 
 
