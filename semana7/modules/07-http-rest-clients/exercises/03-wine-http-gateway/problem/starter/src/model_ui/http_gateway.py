@@ -7,10 +7,10 @@ from threading import local
 from typing import Any
 
 import requests
-from pydantic import ValidationError  # noqa: F401 - pista para el TODO S7.4
+from pydantic import ValidationError
 
 from model_ui.contracts import PredictionPayload
-from model_ui.errors import (  # noqa: F401 - pistas para el TODO S7.2
+from model_ui.errors import (
     ArtifactUnavailableError,
     BackendInferenceError,
     InferenceTimeoutError,
@@ -53,30 +53,64 @@ class HttpInferenceGateway:
     def predict(self, values: Mapping[str, object]) -> PredictionPayload:
         """Envia la muestra por HTTP y devuelve el contrato interno de S6."""
 
-        # TODO S7.1: envia POST a self._prediction_url con json={"features": ...},
-        # Accept application/json y self._timeout. Compruebalo con el test de llamada.
-        # TODO S7.2: traduce Timeout, ConnectionError y RequestException a los
-        # errores de dominio que ya entiende PredictionController.
-        # TODO S7.3: lee un objeto JSON, conserva request_id y diferencia 422/503
-        # del resto de errores HTTP.
-        # TODO S7.4: valida body["prediction"] como PredictionPayload; un dict sin
-        # validar no satisface el contrato de salida.
-        raise NotImplementedError("Completa los TODO S7.1-S7.4")
+        # Cada petición empieza sin el identificador de la anterior.
+        self.last_request_id = None
+        try:
+            response = self._session.post(
+                self._prediction_url,
+                json={"features": dict(values)},
+                headers={"Accept": "application/json"},
+                timeout=self._timeout,
+            )
+        except requests.Timeout as error:
+            raise InferenceTimeoutError("La API ha tardado demasiado.") from error
+        except requests.ConnectionError as error:
+            raise ArtifactUnavailableError(
+                "No se puede conectar con la API."
+            ) from error
+        except requests.RequestException as error:
+            raise BackendInferenceError("No se pudo enviar la petición.") from error
+
+        # Miramos el estado antes del JSON: un error podría llegar como HTML.
+        self.last_request_id = self._header_request_id(response)
+        if response.status_code == 422:
+            raise InputContractError("Los datos no cumplen el contrato de la API.")
+        if response.status_code == 503:
+            raise ArtifactUnavailableError("El modelo no está disponible.")
+        if not 200 <= response.status_code < 300:
+            raise BackendInferenceError(
+                f"La API respondió HTTP {response.status_code}."
+            )
+
+        body = self._read_object(response)
+        self.last_request_id = self._request_id(response, body)
+        try:
+            return PredictionPayload.model_validate(body.get("prediction"))
+        except ValidationError as error:
+            raise BackendInferenceError(
+                "La predicción recibida no es válida."
+            ) from error
 
     @staticmethod
     def _read_object(response: Any) -> dict[str, Any]:
         """Lee una respuesta JSON que debe representar un objeto."""
 
-        # TODO S7.3: usa response.json(), traduce ValueError y rechaza listas u
-        # otros valores que no sean un objeto JSON.
-        raise NotImplementedError("Completa el lector JSON del TODO S7.3")
+        try:
+            body = response.json()
+        except ValueError as error:
+            raise BackendInferenceError("La respuesta no es JSON válido.") from error
+        if not isinstance(body, dict):
+            raise BackendInferenceError("La respuesta debe ser un objeto JSON.")
+        return body
 
     @staticmethod
     def _request_id(response: Any, body: dict[str, Any]) -> str | None:
         """Obtiene request_id del cuerpo y usa la cabecera como alternativa."""
 
-        # TODO S7.3: prioriza body["request_id"] y usa X-Request-Id como fallback.
-        raise NotImplementedError("Completa la trazabilidad del TODO S7.3")
+        request_id = body.get("request_id")
+        if isinstance(request_id, str) and request_id.strip():
+            return request_id
+        return HttpInferenceGateway._header_request_id(response)
 
     @staticmethod
     def _header_request_id(response: Any) -> str | None:

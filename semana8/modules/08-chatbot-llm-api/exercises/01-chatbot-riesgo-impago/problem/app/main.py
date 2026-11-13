@@ -1,4 +1,5 @@
 """Punto de entrada de la API (YA HECHO). Arranque: uvicorn app.main:app --port 8000"""
+
 from fastapi import FastAPI
 
 from app.routers import chat, health, predict
