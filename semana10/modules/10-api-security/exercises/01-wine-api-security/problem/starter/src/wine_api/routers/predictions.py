@@ -1,9 +1,10 @@
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, Depends
 
 from wine_api.dependencies import PredictorDep, RequestIdDep
+from wine_api.rate_limit import enforce_rate_limit
 from wine_api.schemas import (
     VALID_FEATURES_EXAMPLE,
     ErrorResponse,
@@ -11,6 +12,7 @@ from wine_api.schemas import (
     PredictionRequest,
     PredictionResponse,
 )
+from wine_api.security import require_scope
 
 PREDICTION_EXAMPLES = {
     "valid": {
@@ -30,19 +32,23 @@ PREDICTION_EXAMPLES = {
     },
 }
 
-# TODO S10.2f: protege TODAS las operaciones de este router declarando la
-# autenticación en `dependencies=[...]` del `APIRouter` (no en cada ruta ni en
-# `include_router()`). ¿Qué ventaja tiene declararla una sola vez aquí?
-# TODO S10.3c: sustituye la autenticación a secas por `require_scope("predict")`.
-# TODO S10.4d: añade `enforce_rate_limit` DESPUÉS del scope: FastAPI resuelve
-# las dependencias en el orden en que las declaras.
-# TODO S10.6a: documenta en `responses=` los 401, 403 y 429 con `ErrorResponse`
-# (y la cabecera `Retry-After` del 429; investiga el campo `headers` de una
-# respuesta en OpenAPI). Comprobación: tests/test_s10_6_openapi.py
 router = APIRouter(
     prefix="/v1/predictions",
     tags=["predictions"],
+    dependencies=[Depends(require_scope("predict")), Depends(enforce_rate_limit)],
     responses={
+        401: {"model": ErrorResponse, "description": "Clave ausente o incorrecta."},
+        403: {"model": ErrorResponse, "description": "Falta el permiso predict."},
+        429: {
+            "model": ErrorResponse,
+            "description": "Cuota por minuto agotada.",
+            "headers": {
+                "Retry-After": {
+                    "description": "Segundos hasta poder volver a intentar.",
+                    "schema": {"type": "integer", "minimum": 1},
+                },
+            },
+        },
         400: {"model": ErrorResponse, "description": "El cuerpo no es JSON válido."},
         422: {
             "model": ErrorResponse,

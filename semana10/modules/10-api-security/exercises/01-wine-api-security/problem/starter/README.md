@@ -114,3 +114,14 @@ LOCUST_API_KEY=<clave-front> uv run --group load locust -f locustfile.py \
 - `CORSMiddleware`: FastAPI, «CORS (Cross-Origin Resource Sharing)».
 - Locust: «Writing a locustfile», `catch_response` y «Retrieve test statistics
   in CSV format».
+
+
+## Nota de versionado y cliente
+
+La API pasa a 2.0.0 porque las peticiones anónimas de predicción dejan de funcionar.
+El cuerpo de entrada y los campos públicos de salida se mantienen.
+El cliente HTTP del front de S7 debe enviar la cabecera `X-API-Key`.
+El front utiliza el cliente `front`, con permiso `predict`, sin permiso `admin`.
+La clave se guarda en el entorno del servidor Streamlit o en sus secrets, fuera de Git.
+No debe incluirse en el código ni enviarse al navegador del usuario.
+Ante 401 se revisa la clave, ante 403 los permisos y ante 429 se respeta `Retry-After`.

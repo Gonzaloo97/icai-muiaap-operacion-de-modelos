@@ -77,3 +77,15 @@ uv run ruff format --check .
 - `responses=` y `openapi_examples=`: FastAPI, «Additional Responses in
   OpenAPI» y «Declare Request Example Data».
 - `app.dependency_overrides`: FastAPI, «Testing Dependencies with Overrides».
+
+
+## Nota de compatibilidad
+
+La API pasa de 1.0.0 a 1.1.0 porque incorpora `served_at` sin retirar campos públicos.
+La ruta `/v1/predictions` y las once variables de entrada se mantienen.
+`raw_score` es interno y queda fuera de la respuesta pública.
+`confidence` se serializa con dos decimales y `served_at` en UTC con sufijo Z.
+Los errores conservan el sobre común y el identificador `request_id`.
+El cliente puede seguir leyendo los mismos campos públicos e ignorar `served_at`.
+Renombrar `quality_band` o exigir una entrada nueva rompería a los clientes de S7.
+Ese cambio incompatible requeriría una versión mayor, 2.0.0.

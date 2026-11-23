@@ -68,3 +68,38 @@ Abre [`tests/test_examples.py`](../../../tests/test_examples.py).
 **Comprobación:** la suite vuelve a estar en verde con tu test incluido.
 
 La [solución comentada](../solution/README.md) se comparte al final de la clase.
+
+## Respuestas
+
+### M1
+
+1. `/leaky` muestra `raw_score` y `threshold_config`; `/public` no los muestra.
+2. `response_model=PublicScore` valida la salida y filtra los campos que no declara, aunque la función devuelva un diccionario con ellos.
+3. Sí: `is_reliable` aparece como booleano de solo lectura, calculado a partir de `confidence`.
+
+### M2
+
+| Petición | Status | `error.code` | `error.fields` |
+| --- | --- | --- | --- |
+| `POST /v1/scores`, `{"age":30,"income":1000}` | 200 | No hay error | No aparece; respuesta `{"score":0.01}` |
+| `POST /v1/scores`, `{"age":"treinta","income":1000}` | 422 | `validation_error` | `[{"field":"age","message":"Input should be a valid integer, unable to parse string as an integer"}]` |
+| `POST /v1/scores`, `{"age":30}` | 422 | `validation_error` | `[{"field":"income","message":"Field required"}]` |
+| `GET /v1/nada` | 404 | `not_found` | No aparece |
+| `GET /v1/boom` | 500 | `internal_error` | No aparece |
+
+La primera petición es válida: hay cuatro respuestas de error, no cinco.
+Sin el manejador personalizado, FastAPI devuelve 422 con `detail`, que contiene `type`, `loc`, `msg` e `input`, en lugar del sobre `error`.
+El 500 devuelve un mensaje genérico y no muestra el texto de la excepción.
+
+### M3
+
+En `paths["/v1/scores"]["post"]`, el resumen está en `summary`, el docstring en `description` y los códigos de respuesta en `responses`.
+El ejemplo `minor` devuelve 422 porque `age=16` incumple el mínimo de 18.
+Se ha añadido `no_income` con `{"age":30}`; devuelve 422 porque falta `income`.
+El contrato incluye los tres ejemplos `valid`, `minor` y `no_income`; el test comprueba los tres.
+
+### M4
+
+El test `test_dependency_override_simulates_unavailable_model` sustituye `get_model` por un modelo no disponible y comprueba el 503.
+Sin `raise_server_exceptions=False`, la llamada a `/v1/boom` propaga `RuntimeError` al test en lugar de permitir comprobar la respuesta 500.
+El test añadido, `test_zero_income_returns_422`, comprueba el status 422, `validation_error` y `fields[0].field == "income"`.
